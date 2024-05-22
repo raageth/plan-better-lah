@@ -1,17 +1,8 @@
 import logging
 import requests
 from supabase import create_client, Client
-from keys import DB_PASSWORD, DB_URL, DB_API_KEY
-
-def day_to_int(day: str) -> int:
-    days = {
-        'Monday': 1,
-        'Tuesday': 2,
-        'Wednesday': 3,
-        'Thursday': 4,
-        'Friday': 5
-    }
-    return days[day]
+from utils.keys import DB_PASSWORD, DB_URL, DB_API_KEY
+from utils.helpers import day_to_int
 
 def get_modules(url: str) -> list:
     url = url % 'moduleList'
@@ -46,7 +37,7 @@ def upsert_db(db: Client, table: str, data: list) -> None:
     d, count = db.table(table).upsert(data).execute()
     row_cnt = len(d[1])
     logger.info(f'{row_cnt} rows inserted into {table} table')
-    
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger()
