@@ -100,7 +100,7 @@ def main() -> None:
         states={
             MODS: [MessageHandler(filters.TEXT & ~filters.COMMAND, mods)],
         },
-        fallbacks=[CommandHandler("cancel", cancel), CommandHandler("done", done)],
+        fallbacks=[CommandHandler("done", done), CommandHandler("cancel", cancel)],
     )
 
     application.add_handler(conv_handler)
