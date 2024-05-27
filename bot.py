@@ -1,6 +1,7 @@
 
 
 import logging
+import re
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import (
@@ -31,9 +32,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Starts the conversation and asks the user about the modules they would be taking."""
 
     await update.message.reply_text(
-        "Hi! Welcome to PlanBetterLah!, where we will help you to achieve your ideal timetable!\n"
+        "Hi! Welcome to PlanBetterLah!, where we will help you to achieve your ideal timetable!\n\n"
         "Send /cancel to stop the conversation at any time.\n\n"
-        "To start off, please let me know what modules you would be taking one at a time",
+        "To start off, please let me know what modules you would be taking one at a time. Eg. CS1101S",
     )
     context.user_data['modules'] = []
 
@@ -57,15 +58,26 @@ async def mods(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if module.lower() == "/cancel":
         return await cancel(update, context)
 
+    #Check for punctuation
+    if re.search(r'[^\w\s]', module):
+        await update.message.reply_text(
+            "Module names should not contain any punctuation. Please enter a valid module name. Eg. CS1101S"
+        )
+        return MODS
+
    # Only accept single-word module names
     if len(module.split()) == 1:
-        context.user_data['modules'].append(module)
-        logger.info("User %s is taking module: %s", user.first_name, module)
-        await update.message.reply_text(
-            f"Got it! Current list of modules is: {context.user_data['modules']}\n"
-            "Do you want to add more modules? If yes, please enter the next module name. Otherwise, send /done to manage your current selection of modules."
-        )
-
+        if module in context.user_data['modules']:
+            await update.message.reply_text(
+                f"The module '{module}' is already in your list. Please enter a different module."
+            )
+        else:
+            context.user_data['modules'].append(module)
+            logger.info("User %s is taking module: %s", user.first_name, module)
+            await update.message.reply_text(
+                f"Got it! Current list of modules is: {context.user_data['modules']}\n\n"
+                "Do you want to add more modules? If yes, please enter the next module name. Otherwise, send /done to manage your current selection of modules."
+            )
     else:
         await update.message.reply_text("Please enter only one module name at a time.")
         return MODS
@@ -78,7 +90,7 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.message.from_user
     logger.info("User %s has completed the module input.", user.first_name)
     await update.message.reply_text(
-        f"Great! Here is the list of modules you've entered: {context.user_data['modules']}\n"
+        f"Great! Here is the list of modules you've entered: {context.user_data['modules']}\n\n"
         "If it is correct, please send /generate to get your timetable URL.\n\n"
         "If you wish to delete any modules, please send /delete and choose the module you wish to delete.\n\n"
         "If you wish to add more modules, please send the module name directly instead."
@@ -99,10 +111,9 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     keyboard = [[module] for module in modules]
     keyboard.append(["Cancel"])
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
 
     await update.message.reply_text(
-        "Please choose the module you want to delete:", reply_markup=reply_markup
+        "Please choose the module you want to delete:", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
     )
 
     return DELETE
@@ -112,15 +123,24 @@ async def confirm_delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user = update.message.from_user
     selected_module = update.message.text
     modules = context.user_data.get('modules', [])
+    
+    logger.info("User %s is trying to delete module: %s", user.first_name, selected_module)
+    logger.info("Current list of modules: %s", modules)
 
     if selected_module == "Cancel":
-        await update.message.reply_text("Deletion cancelled.")
+        if selected_module in modules:
+            modules.remove(selected_module)
+        await update.message.reply_text(
+                f"Current list of modules is: {context.user_data['modules']}\n\n"
+                "Please continue adding more modules or send /done to manage your current selection of modules."
+            )
         return MODS
 
     if selected_module in modules:
         modules.remove(selected_module)
         await update.message.reply_text(
-            f"Module '{selected_module}' has been deleted. Please continue adding more modules or send /done to manage your current selection of modules."
+            f"Module '{selected_module}' has been deleted. Current list of modules is: {context.user_data['modules']}\n\n"
+            "Please continue adding more modules or send /done to manage your current selection of modules."
         )
     else:
         await update.message.reply_text(
@@ -135,7 +155,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.message.from_user
     logger.info("User %s has received URL", user.first_name)
     await update.message.reply_text(
-        f"Great! Please refer to the following URL for your timetable. {sample_url}\nThank you for using PlanBetterLah!",
+        f"Great! Please refer to the following URL for your timetable. {sample_url}\n\nThank you for using PlanBetterLah!",
         reply_markup=ReplyKeyboardRemove(),
     )
 
