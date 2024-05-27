@@ -67,6 +67,7 @@ async def mods(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
    # Only accept single-word module names
     if len(module.split()) == 1:
+        #Check for duplicates
         if module in context.user_data['modules']:
             await update.message.reply_text(
                 f"The module '{module}' is already in your list. Please enter a different module."
@@ -166,7 +167,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.message.from_user
     logger.info("User %s canceled the conversation.", user.first_name)
     await update.message.reply_text(
-        "Bye! I hope we can talk again some day.", reply_markup=ReplyKeyboardRemove()
+        "Bye! Thank you for using PlanBetterLah!", reply_markup=ReplyKeyboardRemove()
     )
 
     return ConversationHandler.END
