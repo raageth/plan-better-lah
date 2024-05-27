@@ -22,7 +22,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
-MODS = 0
+MODS = range(1)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -94,7 +94,7 @@ def main() -> None:
     # Create the Application and pass it your bot's token.
     application = Application.builder().token(BOT_API_KEY).build()
 
-    # Add conversation handler with the states MODS, ADD_MORE
+    # Add conversation handler with the states MODS
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
