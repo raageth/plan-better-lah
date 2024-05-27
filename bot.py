@@ -12,7 +12,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from keys import BOT_API_KEY
+from utils.keys import BOT_API_KEY
 
 # Enable logging
 logging.basicConfig(
