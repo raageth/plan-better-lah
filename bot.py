@@ -22,14 +22,16 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
-MODS = range(1)
+MODS, DELETE = range(2)
 
+# RETURN A URL
+sample_url = "https://nusmods.com/timetable/sem-2/share?CS2030S=LAB:14F,REC:15,LEC:2&CS2040S=TUT:32,LEC:2,REC:08&ES2660=SEC:G08&IS1128=LEC:1&MA1521=TUT:16,LEC:1"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Starts the conversation and asks the user about the modules they would be taking."""
 
     await update.message.reply_text(
-        "Hi! Welcome to PlanBetterLah!, where we will help you to achieve your ideal timetable!"
+        "Hi! Welcome to PlanBetterLah!, where we will help you to achieve your ideal timetable!\n"
         "Send /cancel to stop the conversation at any time.\n\n"
         "To start off, please let me know what modules you would be taking one at a time",
     )
@@ -46,6 +48,10 @@ async def mods(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
      # Check if the user is done
     if module.lower() == "/done":
         return await done(update, context)
+    
+    # Check if the user wants to delete
+    if module.lower() == "/delete":
+        return await delete(update, context)
         
      # Check if the user wants to cancel
     if module.lower() == "/cancel":
@@ -57,7 +63,7 @@ async def mods(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         logger.info("User %s is taking module: %s", user.first_name, module)
         await update.message.reply_text(
             f"Got it! Current list of modules is: {context.user_data['modules']}\n"
-            "Do you want to add more modules? If yes, enter the next module name. Otherwise, send /done."
+            "Do you want to add more modules? If yes, please enter the next module name. Otherwise, send /done to manage your current selection of modules."
         )
 
     else:
@@ -68,16 +74,73 @@ async def mods(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Ends the conversation after collecting all modules"""
+    """Collects all the modules to generate URL"""
     user = update.message.from_user
     logger.info("User %s has completed the module input.", user.first_name)
     await update.message.reply_text(
-        f"Great! Here is the list of modules you've entered: {context.user_data['modules']}\nThank you for using PlanBetterLah!",
+        f"Great! Here is the list of modules you've entered: {context.user_data['modules']}\n"
+        "If it is correct, please send /generate to get your timetable URL.\n\n"
+        "If you wish to delete any modules, please send /delete and choose the module you wish to delete.\n\n"
+        "If you wish to add more modules, please send the module name directly instead."
+    )
+
+    return MODS
+
+async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Asks the user to select a module to delete"""
+    user = update.message.from_user
+    modules = context.user_data.get('modules', [])
+
+    if not modules:
+        await update.message.reply_text(
+            "No modules to delete. Please add some modules first."
+        )
+        return MODS
+
+    keyboard = [[module] for module in modules]
+    keyboard.append(["Cancel"])
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+
+    await update.message.reply_text(
+        "Please choose the module you want to delete:", reply_markup=reply_markup
+    )
+
+    return DELETE
+    
+async def confirm_delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Confirms the deletion of the selected module"""
+    user = update.message.from_user
+    selected_module = update.message.text
+    modules = context.user_data.get('modules', [])
+
+    if selected_module == "Cancel":
+        await update.message.reply_text("Deletion cancelled.")
+        return MODS
+
+    if selected_module in modules:
+        modules.remove(selected_module)
+        await update.message.reply_text(
+            f"Module '{selected_module}' has been deleted. Please continue adding more modules or send /done to manage your current selection of modules."
+        )
+    else:
+        await update.message.reply_text(
+            "Invalid module selection. Please choose a module from the list."
+        )
+        return DELETE  # Return to the DELETE state to prompt for a valid selection
+
+    return MODS
+
+async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Generates the URL for the timetable and ends the conversation"""
+    user = update.message.from_user
+    logger.info("User %s has received URL", user.first_name)
+    await update.message.reply_text(
+        f"Great! Please refer to the following URL for your timetable. {sample_url}\nThank you for using PlanBetterLah!",
         reply_markup=ReplyKeyboardRemove(),
     )
 
     return ConversationHandler.END
-    
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancels and ends the conversation."""
     user = update.message.from_user
@@ -99,8 +162,9 @@ def main() -> None:
         entry_points=[CommandHandler("start", start)],
         states={
             MODS: [MessageHandler(filters.TEXT & ~filters.COMMAND, mods)],
+            DELETE: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_delete)]
         },
-        fallbacks=[CommandHandler("done", done), CommandHandler("cancel", cancel)],
+        fallbacks=[CommandHandler("done", done), CommandHandler("delete", delete), CommandHandler("generate", generate), CommandHandler("cancel", cancel)],
     )
 
     application.add_handler(conv_handler)
@@ -112,5 +176,3 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-# RETURN A URL
-#sample_url = "https://nusmods.com/timetable/sem-2/share?CS2030S=LAB:14F,REC:15,LEC:2&CS2040S=TUT:32,LEC:2,REC:08&ES2660=SEC:G08&IS1128=LEC:1&MA1521=TUT:16,LEC:1"
