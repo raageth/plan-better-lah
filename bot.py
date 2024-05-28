@@ -67,6 +67,7 @@ async def mods(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
    # Only accept single-word module names
     if len(module.split()) == 1:
+        module = module.upper()
         #Check for duplicates
         if module in context.user_data['modules']:
             await update.message.reply_text(
