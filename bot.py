@@ -13,6 +13,7 @@ from telegram.ext import (
     filters,
 )
 from utils.keys import BOT_API_KEY
+from db import SupabaseClient
 
 # Enable logging
 logging.basicConfig(
@@ -23,7 +24,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
-MODS, DELETE = range(2)
+SEMESTER, MODS, DELETE = range(3)
 
 # RETURN A URL
 sample_url = "https://nusmods.com/timetable/sem-2/share?CS2030S=LAB:14F,REC:15,LEC:2&CS2040S=TUT:32,LEC:2,REC:08&ES2660=SEC:G08&IS1128=LEC:1&MA1521=TUT:16,LEC:1"
@@ -34,12 +35,30 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text(
         "Hi! Welcome to PlanBetterLah!, where we will help you to achieve your ideal timetable!\n\n"
         "Send /cancel to stop the conversation at any time.\n\n"
-        "To start off, please let me know what modules you would be taking one at a time. Eg. CS1101S",
+        "To start off, please let me know which semester you are planning for.", reply_markup=ReplyKeyboardMarkup([["1","2"]], one_time_keyboard=True, resize_keyboard=True)
     )
+
+    return SEMESTER
+
+async def sem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Stores which semester the user is querying for and asks about the modules they would be taking"""
+    user = update.message.from_user
+    semester = update.message.text.strip()
+
+    if semester not in ["1", "2"]:
+        await update.message.reply_text(
+            "Invalid semester. Please enter 1 or 2."
+        )
+        return SEMESTER
+
+    context.user_data['semester'] = semester
     context.user_data['modules'] = []
 
+    await update.message.reply_text(
+        f"Great! You're planning for semester {semester}.\n\n"
+        "Now, please let me know what modules you would be taking one at a time. Eg. CS1101S.",
+    )
     return MODS
-
 
 async def mods(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Stores the user's modules"""
@@ -74,12 +93,20 @@ async def mods(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 f"The module '{module}' is already in your list. Please enter a different module."
             )
         else:
-            context.user_data['modules'].append(module)
-            logger.info("User %s is taking module: %s", user.first_name, module)
-            await update.message.reply_text(
-                f"Got it! Current list of modules is: {context.user_data['modules']}\n\n"
-                "Do you want to add more modules? If yes, please enter the next module name. Otherwise, send /done to manage your current selection of modules."
-            )
+            #check for valid mod
+            db = SupabaseClient()
+            semester = context.user_data["semester"]
+            if db.check_valid_mod(module, semester):
+                context.user_data['modules'].append(module)
+                logger.info("User %s is taking module: %s", user.first_name, module)
+                await update.message.reply_text(
+                    f"Got it! Current list of modules is: {context.user_data['modules']}\n\n"
+                    "Do you want to add more modules? If yes, please enter the next module name. Otherwise, send /done to manage your current selection of modules."
+                )
+            else:
+                await update.message.reply_text(
+                    f"Invalid module name or {module} is not offered in sem {semester}. Please ensure that you enter the module name correctly. Eg. CS1101S."
+                )
     else:
         await update.message.reply_text("Please enter only one module name at a time.")
         return MODS
@@ -155,6 +182,14 @@ async def confirm_delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Generates the URL for the timetable and ends the conversation"""
     user = update.message.from_user
+    modules = context.user_data.get('modules', [])
+
+    if not modules:
+        await update.message.reply_text(
+            "No modules have been added. Please add some modules first."
+        )
+        return MODS
+    
     logger.info("User %s has received URL", user.first_name)
     await update.message.reply_text(
         f"Great! Please refer to the following URL for your timetable. {sample_url}\n\nThank you for using PlanBetterLah!",
@@ -183,6 +218,7 @@ def main() -> None:
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
+            SEMESTER:[MessageHandler(filters.TEXT & ~filters.COMMAND, sem)],
             MODS: [MessageHandler(filters.TEXT & ~filters.COMMAND, mods)],
             DELETE: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_delete)]
         },

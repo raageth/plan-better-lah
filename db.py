@@ -13,7 +13,7 @@ class SupabaseClient:
         self.base_url = f'https://api.nusmods.com/v2/{acad_year}/%s.json'
         self.db = create_client(DB_URL, DB_API_KEY)
 
-    def check_valid_mod(self, mod_id: str) -> bool:
+    def check_valid_mod(self, mod_id: str, semester: str) -> bool:
         # TODO: Error handling for resp
         resp = self.db.table('modules').select('id').eq('id', mod_id).execute()
         if resp.data:
