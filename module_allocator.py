@@ -1,8 +1,9 @@
-class CuckooBird:
-    def __init__(self, size):
-        self.size = size
-        self.table1 = [None] * size
-        self.table2 = [None] * size
+class ModuleAllocator:
+    def __init__(self, mod_id_list: list, blocked_out_days: list):
+        self.mod_id_list = mod_id_list
+        self.size = len(mod_id_list)
+        self.table1 = [None] * self.size
+        self.table2 = [None] * self.size
 
     def hash_function1(self, key):
         return hash(key) % self.size

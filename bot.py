@@ -1,5 +1,3 @@
-
-
 import logging
 import re
 
@@ -14,6 +12,7 @@ from telegram.ext import (
 )
 from utils.keys import BOT_API_KEY
 from db import DBClient
+from module_allocator import ModuleAllocator
 
 # Enable logging
 logging.basicConfig(
@@ -191,6 +190,10 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return MODS
     
     logger.info("User %s has received URL", user.first_name)
+    # Initialise class with modules and generate URL
+    blocked_out_days = [] # Add user input for blocked out days
+    allocator = ModuleAllocator(modules, blocked_out_days)
+    
     await update.message.reply_text(
         f"Great! Please refer to the following URL for your timetable. {sample_url}\n\nThank you for using PlanBetterLah!",
         reply_markup=ReplyKeyboardRemove(),

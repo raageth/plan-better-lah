@@ -81,5 +81,5 @@ class DBClient:
 
 if __name__ == "__main__":
     client = DBClient()
-    pprint(client.get_mod_info('CS203', '1'))
+    t = client.get_mod_info('CE3102', '2')
     
