@@ -12,7 +12,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from utils.keys import BOT_API_KEY, HEROKU_LINK
+from utils.keys import BOT_API_KEY
 from db import SupabaseClient
 
 # Enable logging
@@ -212,7 +212,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 def main() -> None:
     """Run the bot."""
     # Create the Application and pass it your bot's token.
-    application = Application.builder().token(HEROKU_LINK + BOT_API_KEY).build()
+    application = Application.builder().token(BOT_API_KEY).build()
 
     # Add conversation handler with the states MODS
     conv_handler = ConversationHandler(
