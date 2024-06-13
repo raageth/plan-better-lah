@@ -13,7 +13,8 @@ from telegram.ext import (
     filters,
 )
 from utils.keys import BOT_API_KEY
-from db import SupabaseClient
+from db import DBClient
+from module_allocator import ModuleAllocator
 
 # Enable logging
 logging.basicConfig(
@@ -94,7 +95,7 @@ async def mods(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             )
         else:
             #check for valid mod
-            db = SupabaseClient()
+            db = DBClient()
             semester = context.user_data["semester"]
             if db.check_valid_mod(module, semester):
                 context.user_data['modules'].append(module)
@@ -190,6 +191,10 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return MODS
     
+    # Initialise class with modules and generate URL
+    blocked_out_days = [] # Add user input for blocked out days
+    allocator = ModuleAllocator(modules, blocked_out_days)
+
     logger.info("User %s has received URL", user.first_name)
     await update.message.reply_text(
         f"Great! Please refer to the following URL for your timetable. {sample_url}\n\nThank you for using PlanBetterLah!",
