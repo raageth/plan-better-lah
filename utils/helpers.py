@@ -14,8 +14,14 @@ def day_to_int(day: str) -> int:
     }
     return days[day]
 
+def user_days_to_array(input_str: str) -> list:
+    days = []
+    days = [day.strip() for day in input_str.split(',') if day.strip()]
+
+    return days
+    
 def shorten_lesson_type(lesson_type: str) -> str:
-    """
+    """ 
     Shorten the lesson type.
     """
 

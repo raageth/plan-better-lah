@@ -78,8 +78,72 @@ class DBClient:
         
         result = self.collection.insert_many(insert_list).inserted_ids
         self.logger.info(f'{len(result)} rows inserted')
+    
+    def draw_module_info(self, modules: list, semester: str) -> list:
+        mod_info = []
+        for module in modules:
+            mod_info.append(self.get_mod_info(module, semester))
+        unique_mod_info = []
+
+        #Filter out only unique lesson choices
+        for mod in mod_info:
+            unique_info = {}
+
+            #Iterate over each type('TUT', 'LEC', etc)
+            for lesson_type, class_info in mod.items():
+                unique_classes = {}
+                unique_combi = set() #Store unique (day, start_time, end_time)
+
+                #Iterate over each class
+                for lesson_no, lesson_info in class_info.items():
+                    for item in lesson_info:
+                        combi = (item['day'], item['start_time'], item['end_time'])
+
+                        if combi not in unique_combi:
+                            unique_combi.add(combi)
+
+                            if lesson_no not in unique_classes:
+                                unique_classes[lesson_no] = []
+
+                            unique_classes[lesson_no].append(item)
+
+                unique_info[lesson_type] = unique_classes
+            
+            unique_mod_info.append(unique_info)
+
+        unique_mod_info = self.module_days_filtered(unique_mod_info, [4])
+        print(unique_mod_info)
+        return unique_mod_info
+    
+    #NOT WORKING
+    def module_days_filtered(self, mod_info: list, blocked_days: list) -> list:
+        if blocked_days:
+            filtered_mod_info = []
+            for mod in mod_info:
+                filtered_info = {}
+                for lesson_type, class_info in mod.items():
+                    filtered_classes = {}
+
+                    for lesson_no, lesson_info in class_info.items():
+                        is_blocked = False
+                        for item in lesson_info:
+                            if item['day'] in blocked_days:
+                                is_blocked = True
+                                break
+                        if not is_blocked:
+                            filtered_classes[lesson_no] = lesson_info
+
+                    filtered_info[lesson_type] = filtered_classes
+
+                filtered_mod_info.append(filtered_info)
+
+            return filtered_mod_info
+        
+        return mod_info
 
 if __name__ == "__main__":
     client = DBClient()
     t = client.get_mod_info('CE3102', '2')
+    client.draw_module_info(['CE3102', 'MA1521'], '2')
+    
     

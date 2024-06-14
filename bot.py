@@ -15,6 +15,7 @@ from telegram.ext import (
 from utils.keys import BOT_API_KEY
 from db import DBClient
 from module_allocator import ModuleAllocator
+from utils.helpers import user_days_to_array
 
 # Enable logging
 logging.basicConfig(
@@ -25,7 +26,11 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
-SEMESTER, MODS, DELETE = range(3)
+db = DBClient()
+
+SEMESTER, MODS, DELETE, BLOCK_DAYS, FINISH = range(5)
+
+MAX_NO_OF_MODULES = 8
 
 # RETURN A URL
 sample_url = "https://nusmods.com/timetable/sem-2/share?CS2030S=LAB:14F,REC:15,LEC:2&CS2040S=TUT:32,LEC:2,REC:08&ES2660=SEC:G08&IS1128=LEC:1&MA1521=TUT:16,LEC:1"
@@ -84,26 +89,39 @@ async def mods(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             "Module names should not contain any punctuation. Please enter a valid module name. Eg. CS1101S"
         )
         return MODS
-
+    
+    modules = context.user_data['modules']
    # Only accept single-word module names
     if len(module.split()) == 1:
         module = module.upper()
         #Check for duplicates
-        if module in context.user_data['modules']:
+        if module in modules:
             await update.message.reply_text(
                 f"The module '{module}' is already in your list. Please enter a different module."
             )
         else:
             #check for valid mod
-            db = DBClient()
             semester = context.user_data["semester"]
             if db.check_valid_mod(module, semester):
-                context.user_data['modules'].append(module)
+                if len(modules) >= MAX_NO_OF_MODULES:
+                    await update.message.reply_text(
+                        "Maximum number of modules allowed per semester reached. Please send /delete and delete a module before adding more."
+                    )
+                    return MODS
+                
+                modules.append(module)
                 logger.info("User %s is taking module: %s", user.first_name, module)
-                await update.message.reply_text(
-                    f"Got it! Current list of modules is: {context.user_data['modules']}\n\n"
-                    "Do you want to add more modules? If yes, please enter the next module name. Otherwise, send /done to manage your current selection of modules."
-                )
+                if len(modules) == MAX_NO_OF_MODULES:
+                    await update.message.reply_text(
+                        f"Got it! Current list of modules is: {modules}\n\n"
+                        "Maximum number of modules allowed per semester reached. Please send /done to manage your current selection of modules.\n\n"
+                        "If you wish to delete any modules, please send /delete and choose the module you wish to delete.\n\n"
+                    )
+                else:
+                    await update.message.reply_text(
+                        f"Got it! Current list of modules is: {modules}\n\n"
+                        "Do you want to add more modules? If yes, please enter the next module name. Otherwise, send /done to manage your current selection of modules."
+                    )
             else:
                 await update.message.reply_text(
                     f"Invalid module name or {module} is not offered in sem {semester}. Please ensure that you enter the module name correctly. Eg. CS1101S."
@@ -119,18 +137,25 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Collects all the modules to generate URL"""
     user = update.message.from_user
     logger.info("User %s has completed the module input.", user.first_name)
-    await update.message.reply_text(
-        f"Great! Here is the list of modules you've entered: {context.user_data['modules']}\n\n"
+    modules = context.user_data['modules']
+    if len(modules) == MAX_NO_OF_MODULES:
+            await update.message.reply_text(
+        f"Great! Here is the list of modules you've entered: {modules}\n\n"
         "If it is correct, please send /generate to get your timetable URL.\n\n"
-        "If you wish to delete any modules, please send /delete and choose the module you wish to delete.\n\n"
-        "If you wish to add more modules, please send the module name directly instead."
-    )
+        "If you wish to delete any modules, please send /delete and choose the module you wish to delete."
+        )
+    else:
+        await update.message.reply_text(
+            f"Great! Here is the list of modules you've entered: {modules}\n\n"
+            "If it is correct, please send /generate to get your timetable URL.\n\n"
+            "If you wish to delete any modules, please send /delete and choose the module you wish to delete.\n\n"
+            "If you wish to add more modules, please send the module name directly instead."
+        )
 
     return MODS
 
 async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Asks the user to select a module to delete"""
-    user = update.message.from_user
     modules = context.user_data.get('modules', [])
 
     if not modules:
@@ -191,10 +216,56 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return MODS
     
-    # Initialise class with modules and generate URL
-    blocked_out_days = [] # Add user input for blocked out days
-    allocator = ModuleAllocator(modules, blocked_out_days)
+    await update.message.reply_text(
+        "Please indicate the specific days you wish to exclude from your timetable planning. Use numbers to denote each day, starting with Monday as 1 (eg. '1, 2, 3') \n\n"
+        "If you do not have any particular preferences, please send 'skip'"
+    )
+    return BLOCK_DAYS
 
+async def block_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user = update.message.from_user
+    modules = context.user_data.get('modules', [])
+    message = update.message.text.strip()
+    blocked_out_days = []
+    if message.lower() == "skip":
+        logger.info("User %s has opted to skip blocking days step", user.first_name)    
+
+    else: 
+        avail_days = ['1', '2', '3', '4', '5']
+        blocked_out_days = user_days_to_array(message) # Add user input for blocked out days
+        for day in blocked_out_days:
+            if re.search(r'[^\w\s]', day):
+                await update.message.reply_text(
+                    "Please do not include any other types of punctuation. Use numbers to denote each day, starting with Monday as 1 (eg. '1, 2, 3') "
+                )
+
+                return BLOCK_DAYS
+            
+            elif day in ['6', '7']:
+                await update.message.reply_text(
+                    "No lessons are conducted on the weekends. Please only input numbers from 1 to 5, where Monday is represented by 1, in the following format: '1, 2, 3' "
+                )
+
+                return BLOCK_DAYS
+            
+            elif day in avail_days:
+                continue
+
+            else:
+                await update.message.reply_text(
+                    "Invalid input received. Please ensure that you only input numbers from 1 to 5, where Monday is represented by 1, in the following format: '1, 2, 3' "
+                )
+
+                return BLOCK_DAYS
+        
+        blocked_out_days = [int(x) for x in blocked_out_days]
+        logger.info("User %s has indicated the following blocked_out_days: %s", user.first_name, blocked_out_days)    
+    allocator = ModuleAllocator(modules, blocked_out_days)
+    db.draw_module_info(modules, context.user_data["semester"])
+    return await finish(update, context)
+
+async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user = update.message.from_user
     logger.info("User %s has received URL", user.first_name)
     await update.message.reply_text(
         f"Great! Please refer to the following URL for your timetable. {sample_url}\n\nThank you for using PlanBetterLah!",
@@ -213,7 +284,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     return ConversationHandler.END
 
-
 def main() -> None:
     """Run the bot."""
     # Create the Application and pass it your bot's token.
@@ -225,7 +295,9 @@ def main() -> None:
         states={
             SEMESTER:[MessageHandler(filters.TEXT & ~filters.COMMAND, sem)],
             MODS: [MessageHandler(filters.TEXT & ~filters.COMMAND, mods)],
-            DELETE: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_delete)]
+            DELETE: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_delete)],
+            BLOCK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, block_days)],
+            FINISH: [MessageHandler(filters.TEXT & ~filters.COMMAND, finish)]
         },
         fallbacks=[CommandHandler("done", done), CommandHandler("delete", delete), CommandHandler("generate", generate), CommandHandler("cancel", cancel)],
     )
