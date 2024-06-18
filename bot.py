@@ -3,7 +3,7 @@
 import logging
 import re
 
-from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -15,7 +15,7 @@ from telegram.ext import (
 from utils.keys import BOT_API_KEY
 from db import DBClient
 from module_allocator import ModuleAllocator
-from utils.helpers import user_days_to_array
+from utils.helpers import user_days_to_array, int_to_days
 
 # Enable logging
 logging.basicConfig(
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 db = DBClient()
 
-SEMESTER, MODS, DELETE, BLOCK_DAYS, FINISH = range(5)
+SEMESTER, MODS, DELETE, BLOCK_DAYS, BLOCKOUT_TIMINGS, FINISH = range(6)
 
 MAX_NO_OF_MODULES = 8
 
@@ -218,54 +218,149 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     await update.message.reply_text(
         "Please indicate the specific days you wish to exclude from your timetable planning. Use numbers to denote each day, starting with Monday as 1 (eg. '1, 2, 3') \n\n"
-        "If you do not have any particular preferences, please send 'skip'"
+        "If you do not have any particular preferences, please send 'skip'."
+        #Milestone 3
+        #"\n\nIf you only wish to exclude certain timings instead of the entire day, please send 'skip' and indicate your preference at the next step instead."
     )
     return BLOCK_DAYS
 
 async def block_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Asks user for days to exclude from timetable planning"""
     user = update.message.from_user
-    modules = context.user_data.get('modules', [])
     message = update.message.text.strip()
-    blocked_out_days = []
     if message.lower() == "skip":
-        logger.info("User %s has opted to skip blocking days step", user.first_name)    
+        context.user_data['blocked_days'] = []
+        logger.info("User %s has opted to skip blockout days", user.first_name) 
+        await update.message.reply_text(
+            "Please wait while we generate your timetable for you."
+        )
+        return await finish(update, context)
 
-    else: 
-        avail_days = ['1', '2', '3', '4', '5']
-        blocked_out_days = user_days_to_array(message) # Add user input for blocked out days
-        for day in blocked_out_days:
-            if re.search(r'[^\w\s]', day):
-                await update.message.reply_text(
-                    "Please do not include any other types of punctuation. Use numbers to denote each day, starting with Monday as 1 (eg. '1, 2, 3') "
-                )
+        #Milestone 3
+        # await update.message.reply_text(
+        #     "Please indicate the specific timings you wish to exclude from your timetable planning in the following format: 'Monday: 0800-1000, Tuesday: 1300-1600, 1800-1900, Wednesday: 0900-1400'\n\n"
+        #     "If you do not have any particular preferences, please send 'skip'.\n\n"
+        #     "If you have made a mistake and would like to re-indicate your preference, please send 'edit'. "
+        # )
+        # return BLOCKOUT_TIMINGS
+    
+    #User indicating blockout days
+    avail_days = ['1', '2', '3', '4', '5']
+    blocked_out_days = user_days_to_array(message) # Add user input for blocked out days
+    for day in blocked_out_days:
+        if re.search(r'[^\w\s]', day):
+            await update.message.reply_text(
+                "Please do not include any other types of punctuation. Use numbers to denote each day, starting with Monday as 1 (eg. '1, 2, 3') "
+            )
 
-                return BLOCK_DAYS
-            
-            elif day in ['6', '7']:
-                await update.message.reply_text(
-                    "No lessons are conducted on the weekends. Please only input numbers from 1 to 5, where Monday is represented by 1, in the following format: '1, 2, 3' "
-                )
-
-                return BLOCK_DAYS
-            
-            elif day in avail_days:
-                continue
-
-            else:
-                await update.message.reply_text(
-                    "Invalid input received. Please ensure that you only input numbers from 1 to 5, where Monday is represented by 1, in the following format: '1, 2, 3' "
-                )
-
-                return BLOCK_DAYS
+            return BLOCK_DAYS
         
-        blocked_out_days = [int(x) for x in blocked_out_days]
-        logger.info("User %s has indicated the following blocked_out_days: %s", user.first_name, blocked_out_days)    
-    allocator = ModuleAllocator(modules, blocked_out_days)
-    db.draw_module_info(modules, context.user_data["semester"])
+        elif day in ['6', '7']:
+            await update.message.reply_text(
+                "No lessons are conducted on the weekends. Please only input numbers from 1 to 5, where Monday is represented by 1, in the following format: '1, 2, 3' "
+            )
+
+            return BLOCK_DAYS
+        
+        elif day in avail_days:
+            continue
+
+        else:
+            await update.message.reply_text(
+                "Invalid input received. Please ensure that you only input numbers from 1 to 5, where Monday is represented by 1, in the following format: '1, 2, 3' "
+            )
+
+            return BLOCK_DAYS
+    
+    blocked_out_days = [int(x) for x in blocked_out_days] 
+    string_blocked_out_days = [int_to_days(y) for y in blocked_out_days]
+    context.user_data['blocked_days'] = blocked_out_days
+        
+    await update.message.reply_text(
+        f"The following days have been excluded from your timetable planning: \n{string_blocked_out_days}. \n\nPlease wait while we generate your timetable for you."
+    )
     return await finish(update, context)
+    
+    #Milestone 3
+    # await update.message.reply_text(
+    #     f"The following days have been excluded from your timetable planning: \n{string_blocked_out_days}."
+    # )
+    # logger.info("User %s has indicated the following blocked_out_days: %s", user.first_name, blocked_out_days)  
+    # await update.message.reply_text(
+    #     "Please indicate the specific timings you wish to exclude from your timetable planning in the following format: 'Monday: 0800-1000, Tuesday: 1300-1600, 1800-1900, Wednesday: 0900-1400'\n\n"
+    #     "If you do not have any particular preferences, please send 'skip'.\n\n"
+    #     "If you have made a mistake and would like to re-indicate your preference, please send 'edit'. "
+    # )
+    # return BLOCKOUT_TIMINGS
+
+#Milestone 3
+# async def blockout_timings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+#     user = update.message.from_user
+#     message = update.message.text.strip()
+#     if message.lower() == 'edit':
+#         await update.message.reply_text(
+#             "Please indicate the specific days you wish to exclude from your timetable planning. Use numbers to denote each day, starting with Monday as 1 (eg. '1, 2, 3') \n\n"
+#             "If you do not have any particular preferences, please send 'skip'.\n\n"
+#             "If you only wish to exclude certain timings instead of the entire day, please send 'skip' and indicate your preference at the next step instead."
+#         )
+#         return BLOCK_DAYS
+#     if message.lower() == 'skip':
+#         return await finish(update, context)
+#     return await finish(update, context)
+
+# DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+# TIMESLOTS = [
+#     ["0800-0830", "0830-0900", "0900-0930", "0930-1000"],
+#     ["1000-1030", "1030-1100", "1100-1130", "1130-1200"],
+#     ["1200-1230", "1230-1300", "1300-1330", "1330-1400"],
+#     ["1400-1430", "1430-1500", "1500-1530", "1530-1600"],
+#     ["1600-1630", "1630-1700", "1700-1730", "1730-1800"],
+#     ["1800-1830", "1830-1900", "1900-1930", "1930-2000"],
+#     ["2000-2030", "2030-2100"]
+# ]
+
+# DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+# TIMESLOTS = [
+#     "0800-0830", "0830-0900", "0900-0930", "0930-1000",
+#     "1000-1030", "1030-1100", "1100-1130", "1130-1200",
+#     "1200-1230", "1230-1300", "1300-1330", "1330-1400",
+#     "1400-1430", "1430-1500", "1500-1530", "1530-1600",
+#     "1600-1630", "1630-1700", "1700-1730", "1730-1800",
+#     "1800-1830", "1830-1900", "1900-1930", "1930-2000",
+#     "2000-2030", "2030-2100"
+# ]
+
+# async def blockout_timings(update: Update, context) -> int:
+#     keyboard = []
+#     # Create header row
+#     header = [InlineKeyboardButton("Timeslots", callback_data="none")]
+#     for day in DAYS:
+#         header.append(InlineKeyboardButton(day, callback_data=day))
+#     keyboard.append(header)
+
+#     # Create timeslot rows
+#     for slot in TIMESLOTS:
+#         row = [InlineKeyboardButton(slot, callback_data=slot)]
+#         for _ in DAYS:
+#             row.append(InlineKeyboardButton(" ", callback_data="none"))
+#         keyboard.append(row)
+
+#     reply_markup = InlineKeyboardMarkup(keyboard)
+
+#     await update.message.reply_text(
+#         "Please select the timeslots you wish to exclude from your timetable planning:",
+#         reply_markup=reply_markup
+#     )
+
+#     return BLOCKOUT_TIMINGS
 
 async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.message.from_user
+    modules = context.user_data.get('modules', [])
+    semester = context.user_data["semester"]
+    blocked_out_days = context.user_data.get('blocked_days', [])
+    allocator = ModuleAllocator(modules, blocked_out_days)
+    module_info = db.draw_module_info(modules, semester, blocked_out_days)
     logger.info("User %s has received URL", user.first_name)
     await update.message.reply_text(
         f"Great! Please refer to the following URL for your timetable. {sample_url}\n\nThank you for using PlanBetterLah!",
@@ -297,6 +392,8 @@ def main() -> None:
             MODS: [MessageHandler(filters.TEXT & ~filters.COMMAND, mods)],
             DELETE: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_delete)],
             BLOCK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, block_days)],
+            #Milestone 3
+            #BLOCKOUT_TIMINGS: [MessageHandler(filters.TEXT & ~filters.COMMAND, blockout_timings)], 
             FINISH: [MessageHandler(filters.TEXT & ~filters.COMMAND, finish)]
         },
         fallbacks=[CommandHandler("done", done), CommandHandler("delete", delete), CommandHandler("generate", generate), CommandHandler("cancel", cancel)],

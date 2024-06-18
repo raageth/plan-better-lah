@@ -1,3 +1,5 @@
+import re
+
 def day_to_int(day: str) -> int:
     """
     Convert day string to integer.
@@ -14,10 +16,27 @@ def day_to_int(day: str) -> int:
     }
     return days[day]
 
-def user_days_to_array(input_str: str) -> list:
-    days = []
-    days = [day.strip() for day in input_str.split(',') if day.strip()]
+def int_to_days(day: str) -> int:
+    """
+    Convert integer to day string.
+    """
 
+    days = {
+        1 : 'Monday',
+        2 : 'Tuesday',
+        3 : 'Wednesday',
+        4 : 'Thursday',
+        5 : 'Friday',
+        6 : 'Saturday',
+        7 : 'Sunday'
+    }
+    return days[day]
+
+def user_days_to_array(input_str: str) -> list:
+    days = re.split(r'[,\s]+', input_str)
+    days = [day for day in days if day]
+    days = list(set(days)) # get unique array
+    days.sort()
     return days
     
 def shorten_lesson_type(lesson_type: str) -> str:

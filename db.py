@@ -79,7 +79,7 @@ class DBClient:
         result = self.collection.insert_many(insert_list).inserted_ids
         self.logger.info(f'{len(result)} rows inserted')
     
-    def draw_module_info(self, modules: list, semester: str) -> list:
+    def draw_module_info(self, modules: list, semester: str, blocked_days: list) -> list:
         mod_info = []
         for module in modules:
             mod_info.append(self.get_mod_info(module, semester))
@@ -111,7 +111,7 @@ class DBClient:
             
             unique_mod_info.append(unique_info)
 
-        unique_mod_info = self.module_days_filtered(unique_mod_info, [4])
+        unique_mod_info = self.module_days_filtered(unique_mod_info, blocked_days)
         print(unique_mod_info)
         return unique_mod_info
     
@@ -144,6 +144,6 @@ class DBClient:
 if __name__ == "__main__":
     client = DBClient()
     t = client.get_mod_info('CE3102', '2')
-    client.draw_module_info(['CE3102', 'MA1521'], '2')
+    client.draw_module_info(['CE3102', 'MA1521'], '2', [2])
     
     
