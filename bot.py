@@ -15,6 +15,7 @@ from telegram.ext import (
 from utils.keys import BOT_API_KEY
 from db import DBClient
 from module_allocator import ModuleAllocator
+from mod_planner import ModPlanner
 from utils.helpers import user_days_to_array, int_to_days
 
 # Enable logging
@@ -28,7 +29,10 @@ logger = logging.getLogger(__name__)
 
 db = DBClient()
 
-SEMESTER, MODS, DELETE, BLOCK_DAYS, BLOCKOUT_TIMINGS, FINISH = range(6)
+#Milestone 3
+# SEMESTER, MODS, DELETE, BLOCK_DAYS, BLOCKOUT_TIMINGS, FINISH = range(6)
+
+SEMESTER, MODS, DELETE, BLOCK_DAYS, FINISH = range(5)
 
 MAX_NO_OF_MODULES = 8
 
@@ -218,9 +222,10 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     await update.message.reply_text(
         "Please indicate the specific days you wish to exclude from your timetable planning. Use numbers to denote each day, starting with Monday as 1 (eg. '1, 2, 3') \n\n"
-        "If you do not have any particular preferences, please send 'skip'."
+        "If you do not have any particular preferences, please click 'Skip'.",
         #Milestone 3
         #"\n\nIf you only wish to exclude certain timings instead of the entire day, please send 'skip' and indicate your preference at the next step instead."
+        reply_markup=ReplyKeyboardMarkup([["Skip"]], one_time_keyboard=True, resize_keyboard=True)
     )
     return BLOCK_DAYS
 
@@ -232,9 +237,12 @@ async def block_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         context.user_data['blocked_days'] = []
         logger.info("User %s has opted to skip blockout days", user.first_name) 
         await update.message.reply_text(
-            "Please wait while we generate your timetable for you."
+            "All days would be included in your timetable planning.\n\n"
+            "Please click 'Continue' to confirm your selection and generate your timetable.\n\n"
+            "If you have made a mistake and would like to re-indicate your preference, please click 'Edit'.",
+            reply_markup=ReplyKeyboardMarkup([["Continue", "Edit"]], one_time_keyboard=True, resize_keyboard=True)
         )
-        return await finish(update, context)
+        return FINISH
 
         #Milestone 3
         # await update.message.reply_text(
@@ -245,7 +253,7 @@ async def block_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         # return BLOCKOUT_TIMINGS
     
     #User indicating blockout days
-    avail_days = ['1', '2', '3', '4', '5']
+    avail_days = ['1', '2', '3', '4', '5', '6']
     blocked_out_days = user_days_to_array(message) # Add user input for blocked out days
     for day in blocked_out_days:
         if re.search(r'[^\w\s]', day):
@@ -255,9 +263,9 @@ async def block_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
             return BLOCK_DAYS
         
-        elif day in ['6', '7']:
+        elif day == '7':
             await update.message.reply_text(
-                "No lessons are conducted on the weekends. Please only input numbers from 1 to 5, where Monday is represented by 1, in the following format: '1, 2, 3' "
+                "No lessons are conducted on Sunday. Please only input numbers from 1 to 6, where Monday is represented by 1, in the following format: '1, 2, 3' "
             )
 
             return BLOCK_DAYS
@@ -267,7 +275,7 @@ async def block_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
         else:
             await update.message.reply_text(
-                "Invalid input received. Please ensure that you only input numbers from 1 to 5, where Monday is represented by 1, in the following format: '1, 2, 3' "
+                "Invalid input received. Please ensure that you only input numbers from 1 to 6, where Monday is represented by 1, in the following format: '1, 2, 3' "
             )
 
             return BLOCK_DAYS
@@ -277,13 +285,16 @@ async def block_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['blocked_days'] = blocked_out_days
         
     await update.message.reply_text(
-        f"The following days have been excluded from your timetable planning: \n{string_blocked_out_days}. \n\nPlease wait while we generate your timetable for you."
+        f"The following days will be excluded from your timetable planning: \n{string_blocked_out_days} \n\n"
+        "Please click 'Continue' to confirm your selection and generate your timetable.\n\n"
+        "If you have made a mistake and would like to re-indicate your preference, please click 'Edit'.",
+        reply_markup=ReplyKeyboardMarkup([["Continue", "Edit"]], one_time_keyboard=True, resize_keyboard=True)
     )
-    return await finish(update, context)
+    return FINISH
     
     #Milestone 3
     # await update.message.reply_text(
-    #     f"The following days have been excluded from your timetable planning: \n{string_blocked_out_days}."
+    #     f"The following days have been excluded from your timetable planning: \n{string_blocked_out_days}"
     # )
     # logger.info("User %s has indicated the following blocked_out_days: %s", user.first_name, blocked_out_days)  
     # await update.message.reply_text(
@@ -356,14 +367,45 @@ async def block_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.message.from_user
+    message = update.message.text.strip()
+    if message.lower() not in ['continue', 'edit']:
+        await update.message.reply_text(
+            "Invalid input received. Please ensure that you only click either 'Continue' or 'Edit'."
+        )
+        return FINISH
+    
+    if message.lower() == 'edit':
+        await update.message.reply_text(
+            "Please indicate the specific days you wish to exclude from your timetable planning. Use numbers to denote each day, starting with Monday as 1 (eg. '1, 2, 3') \n\n"
+            "If you do not have any particular preferences, please click 'Skip'.",
+            #Milestone 3
+            #"\n\nIf you only wish to exclude certain timings instead of the entire day, please send 'skip' and indicate your preference at the next step instead."
+            reply_markup=ReplyKeyboardMarkup([["Skip"]], one_time_keyboard=True, resize_keyboard=True)
+        )
+        return BLOCK_DAYS
     modules = context.user_data.get('modules', [])
     semester = context.user_data["semester"]
     blocked_out_days = context.user_data.get('blocked_days', [])
-    allocator = ModuleAllocator(modules, blocked_out_days)
+    string_blocked_out_days = [int_to_days(y) for y in blocked_out_days]
+    #allocator = ModuleAllocator(modules, blocked_out_days)
     module_info = db.draw_module_info(modules, semester, blocked_out_days)
+    planner = ModPlanner(modules, module_info, semester)
+    url = planner.solve()
+    if not url:
+        logger.info("Unable to find optimal timetable")
+        await update.message.reply_text(
+            "Sorry, we did not manage to find a timetable that met these following conditions:\n"
+            f"Semester: {semester}\n"
+            f"Modules: {modules}\n"
+            f"Days excluded from timetable planning: {string_blocked_out_days}\n\n"
+            "Thank you for using PlanBetterLah!",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return ConversationHandler.END
+    
     logger.info("User %s has received URL", user.first_name)
     await update.message.reply_text(
-        f"Great! Please refer to the following URL for your timetable. {sample_url}\n\nThank you for using PlanBetterLah!",
+        f"Great! Please refer to the following URL for your timetable. {url}\n\nThank you for using PlanBetterLah!",
         reply_markup=ReplyKeyboardRemove(),
     )
 

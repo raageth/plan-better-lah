@@ -60,3 +60,12 @@ def shorten_lesson_type(lesson_type: str) -> str:
     }
 
     return lesson_types[lesson_type]
+
+def url_generator(modules: list, class_info: list, semester: str) -> str:
+    mod_info = ""
+    for i, module in enumerate(modules):
+        mod_info += f"{module}="
+        for classes in class_info[i]:
+            mod_info += classes
+        mod_info = mod_info[:-1] + '&'
+    return f"https://nusmods.com/timetable/sem-{semester}/share?{mod_info[:-1]}"

@@ -115,7 +115,6 @@ class DBClient:
         print(unique_mod_info)
         return unique_mod_info
     
-    #NOT WORKING
     def module_days_filtered(self, mod_info: list, blocked_days: list) -> list:
         if blocked_days:
             filtered_mod_info = []
