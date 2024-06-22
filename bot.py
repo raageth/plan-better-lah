@@ -1,5 +1,3 @@
-
-
 import logging
 import re
 
@@ -13,9 +11,8 @@ from telegram.ext import (
     filters,
 )
 from utils.keys import BOT_API_KEY
-from db import DBClient
-from module_allocator import ModuleAllocator
-from mod_planner import ModPlanner
+from algo.db import DBClient
+from algo.mod_planner import ModPlanner
 from utils.helpers import user_days_to_array, int_to_days
 
 # Enable logging
