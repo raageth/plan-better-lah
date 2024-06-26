@@ -1,5 +1,5 @@
 import os
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 # load_dotenv()
 # MONGO_CONN_STRING = os.getenv('MONGO_CONN_STRING')
 MONGO_CONN_STRING = os.environ['MONGO_CONN_STRING']
