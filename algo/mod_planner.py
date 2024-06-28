@@ -87,7 +87,7 @@ class ModPlanner:
                                 start = solver.Value(self.starts[(module_idx, class_type, class_no, class_instance_idx)])
                                 end = solver.Value(self.ends[(module_idx, class_type, class_no, class_instance_idx)])
                                 day = class_info['day']
-                                print(f"Module {module}, {class_type} {class_no}: Day {day}, self.starts at {start} and self.ends at {end}")
+                                print(f"Module {module}, {class_type} {class_no}: Day {day}, starts at {start} and ends at {end}")
             return url_generator(self.modules, url_info, self.sem)
         else:
             print("No solution found.")
