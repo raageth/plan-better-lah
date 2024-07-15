@@ -55,6 +55,7 @@ def shorten_lesson_type(lesson_type: str) -> str:
         'Recitation': 'REC',
         'Packaged Lecture': 'PLEC',
         'Packaged Tutorial': 'PTUT',
+        'Packaged Laboratory': 'PLAB',
         'Workshop': 'WS',
         'Tutorial Type 2': 'TUT2',
     }
