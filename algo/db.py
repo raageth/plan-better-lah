@@ -1,7 +1,7 @@
 import logging
 import requests
 from utils.keys import MONGO_CONN_STRING
-from utils.helpers import day_to_int, shorten_lesson_type
+from utils.helpers import day_to_int, shorten_lesson_type, check_block_timings
 from pymongo import MongoClient
 from pprint import pprint
 import json
@@ -79,10 +79,11 @@ class DBClient:
         result = self.collection.insert_many(insert_list).inserted_ids
         self.logger.info(f'{len(result)} rows inserted')
     
-    def draw_module_info(self, modules: list, semester: str, blocked_days: list) -> list:
+    def draw_module_info(self, modules: list, semester: str, blocked_days: list, timings: dict) -> list:
         mod_info = []
         for module in modules:
             mod_info.append(self.get_mod_info(module, semester))
+        """
         unique_mod_info = []
 
         #Filter out only unique lesson choices
@@ -110,13 +111,17 @@ class DBClient:
                 unique_info[lesson_type] = unique_classes
             
             unique_mod_info.append(unique_info)
+        """
+        blocked_timings = {}
+        for key in timings:
+            blocked_timings[day_to_int(key)] = timings[key]
 
-        unique_mod_info = self.module_days_filtered(unique_mod_info, blocked_days)
-        print(unique_mod_info)
+        unique_mod_info = self.module_days_filtered(mod_info, blocked_days, blocked_timings)
+        #print(unique_mod_info)
         return unique_mod_info
     
-    def module_days_filtered(self, mod_info: list, blocked_days: list) -> list:
-        if blocked_days:
+    def module_days_filtered(self, mod_info: list, blocked_days: list, blocked_timings: dict) -> list:
+        if blocked_days or blocked_timings:
             filtered_mod_info = []
             for mod in mod_info:
                 filtered_info = {}
@@ -126,7 +131,7 @@ class DBClient:
                     for lesson_no, lesson_info in class_info.items():
                         is_blocked = False
                         for item in lesson_info:
-                            if item['day'] in blocked_days:
+                            if item['day'] in blocked_days or check_block_timings(item, blocked_timings):
                                 is_blocked = True
                                 break
                         if not is_blocked:
