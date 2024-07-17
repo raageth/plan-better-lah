@@ -364,7 +364,7 @@ async def blockout_timings(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 "Please indicate the total number of hours you wish to limit your lessons to each day. (an integer between 2 - 24 inclusive)\n\n"
                 "If you do not have any particular preferences, please click 'Skip'.\n\n"
                 "If you have made a mistake and would like to re-indicate your preference, please click 'Edit'.",
-                reply_markup=ReplyKeyboardMarkup([["Edit", "Skip"]], one_time_keyboard=True, resize_keyboard=True)
+                reply_markup=ReplyKeyboardMarkup([["Skip", "Edit"]], one_time_keyboard=True, resize_keyboard=True)
             )
             return LIMIT_HOURS
         await query.message.reply_text(
@@ -372,7 +372,7 @@ async def blockout_timings(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             "Please indicate the total number of hours you wish to limit your lessons to each day. (an integer between 2 - 24 inclusive)\n\n"
             "If you do not have any particular preferences, please click 'Skip'.\n\n"
             "If you have made a mistake and would like to re-indicate your preference, please click 'Edit'.",
-            reply_markup=ReplyKeyboardMarkup([["Edit", "Skip"]], one_time_keyboard=True, resize_keyboard=True)
+            reply_markup=ReplyKeyboardMarkup([["Skip", "Edit"]], one_time_keyboard=True, resize_keyboard=True)
         )
         return LIMIT_HOURS
 
@@ -446,7 +446,7 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             "Please enter the total number of hours you wish to limit your lessons to each day\n\n"
             "If you do not have any particular preferences, please click 'Skip'.\n\n"
             "If you have made a mistake previously and would like to re-indicate your preference for your blockout timings, please click 'Edit'.",
-            reply_markup=ReplyKeyboardMarkup([["Edit", "Skip"]], one_time_keyboard=True, resize_keyboard=True)
+            reply_markup=ReplyKeyboardMarkup([["Skip", "Edit"]], one_time_keyboard=True, resize_keyboard=True)
         )
 
         return LIMIT_HOURS
@@ -454,12 +454,23 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     modules = context.user_data.get('modules', [])
     semester = context.user_data["semester"]
     blocked_out_days = context.user_data.get('blocked_days', [])
-    string_blocked_out_days = [int_to_days(y) for y in blocked_out_days]
+    if not blocked_out_days:
+        string_blocked_out_days = "All days are included in timetable planning."
+    else:
+        string_blocked_out_days = f"Days excluded from timetable planning: {[int_to_days(y) for y in blocked_out_days]}"
 
     blocked_out_timings = context.user_data.get('blocked_slots', list())
-    string_blocked_timings = blocktimings_printer(blocked_out_timings)
+    string_timings = blocktimings_printer(blocked_out_timings)
+    if string_timings == "":
+        string_blocked_timings = "No blockout timings restrictions included in timetable planning.\n"
+    else:
+        string_blocked_timings = f"Blockout timings excluded from timetable planning:\n{string_timings}"
 
     max_hours = context.user_data.get('limit_hours', 24)
+    if max_hours == 24:
+        string_max_hours = "No attention span limiter has been set for total number of lesson hours per day."
+    else: 
+        string_max_hours = f"Limit on total number of lesson hours per day: {max_hours}"
     print(max_hours)
     #allocator = ModuleAllocator(modules, blocked_out_days)
     module_info = db.draw_module_info(modules, semester, blocked_out_days, blocked_out_timings)
@@ -471,10 +482,9 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             "Sorry, we did not manage to find a timetable that met these following conditions:\n"
             f"Semester: {semester}\n"
             f"Modules: {modules}\n"
-            f"Days excluded from timetable planning: {string_blocked_out_days}\n"
-            "Blockout timings excluded from timetable planning: \n"
+            f"{string_blocked_out_days}\n"
             f"{string_blocked_timings}"
-            f"Limit on total number of lesson hours per day: {max_hours}\n\n"
+            f"{string_max_hours}\n\n"
             "Thank you for using PlanBetterLah!",
             reply_markup=ReplyKeyboardRemove(),
         )
@@ -486,10 +496,9 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         "Please refer below for the list of conditions provided:\n"
         f"Semester: {semester}\n"
         f"Modules: {modules}\n"
-        f"Days excluded from timetable planning: {string_blocked_out_days}\n"
-        "Blockout timings excluded from timetable planning: \n"
+        f"{string_blocked_out_days}\n"
         f"{string_blocked_timings}"
-        f"Limit on total number of lesson hours per day: {max_hours}\n\n"
+        f"{string_max_hours}\n\n"
         "Thank you for using PlanBetterLah!",
         reply_markup=ReplyKeyboardRemove(),
     )
