@@ -3,11 +3,18 @@ from collections import defaultdict
 from utils.helpers import url_generator
 
 class ModPlanner:
-    def __init__(self, modules: list, mod_info: list, sem: str):
+    def __init__(self, modules: list, mod_info: list, sem: str, max_hours: int):
         self.modules = modules
         self.mod_info = mod_info
         self.sem = sem
+        self.max_mins = max_hours * 60
 
+    def _parse_time(self, time_str):
+        """Convert time in HHMM format to minutes since midnight."""
+        hours = int(time_str[:2])
+        minutes = int(time_str[2:])
+        return hours * 60 + minutes
+    
     def solve(self) -> str:
         # Model initialization
         self.model = cp_model.CpModel()
@@ -17,6 +24,7 @@ class ModPlanner:
         self.starts = {}  # indexed by (module_idx, class_type, class_no, class_instance_idx)
         self.ends = {}
         self.presences = {}  # indexed by (module_idx, class_type, class_no)
+        self.durations = {}
         self.all_intervals = []
         self.horizon = 0
 
@@ -29,8 +37,8 @@ class ModPlanner:
                     self.presences[(module_idx, class_type, class_no)] = presence_var
                     for class_instance_idx, class_info in enumerate(class_list):
                         day = class_info['day']
-                        start_time = int(class_info['start_time'])
-                        end_time = int(class_info['end_time'])
+                        start_time = self._parse_time(class_info['start_time'])
+                        end_time = self._parse_time(class_info['end_time'])
                         duration = end_time - start_time
                         self.horizon = max(self.horizon, end_time)
 
@@ -41,7 +49,8 @@ class ModPlanner:
 
                         self.starts[(module_idx, class_type, class_no, class_instance_idx)] = start_var
                         self.ends[(module_idx, class_type, class_no, class_instance_idx)] = end_var
-                        self.intervals_per_day[day].append((interval_var, presence_var))
+                        self.durations[(module_idx, class_type, class_no, class_instance_idx)] = duration
+                        self.intervals_per_day[day].append((interval_var, presence_var, duration))
 
                         # Add presence constraints
                         self.model.Add(start_var == start_time).OnlyEnforceIf(presence_var)
@@ -59,7 +68,9 @@ class ModPlanner:
         for day, interval_pairs in self.intervals_per_day.items():
             if len(interval_pairs) > 1:
                 active_intervals = []
-                for interval, presence in interval_pairs:
+                daily_durations = []
+
+                for interval, presence, duration in interval_pairs:
                     active_interval = self.model.NewOptionalIntervalVar(
                         interval.StartExpr(), 
                         interval.SizeExpr(), 
@@ -67,7 +78,11 @@ class ModPlanner:
                         f'active_{interval.Name()}'
                     )
                     active_intervals.append(active_interval)
+                    daily_durations.append(duration * presence)
+
                 self.model.AddNoOverlap(active_intervals)
+                
+                self.model.Add(sum(daily_durations) <= self.max_mins)
 
         # Solve the model
         solver = cp_model.CpSolver()
