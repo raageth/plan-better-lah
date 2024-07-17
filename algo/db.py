@@ -114,7 +114,8 @@ class DBClient:
         """
         blocked_timings = {}
         for key in timings:
-            blocked_timings[day_to_int(key)] = timings[key]
+            if timings[key]:
+                blocked_timings[day_to_int(key)] = timings[key]
 
         unique_mod_info = self.module_days_filtered(mod_info, blocked_days, blocked_timings)
         #print(unique_mod_info)

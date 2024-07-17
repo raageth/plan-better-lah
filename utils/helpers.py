@@ -79,13 +79,16 @@ def blocktimings_printer(timings: dict) -> str:
     return s
 
 def check_block_timings(lesson_info: dict, blocked_slots: dict) -> bool:
-    timings_list = blocked_slots[lesson_info['day']]
-    lesson_start = lesson_info['start_time']
-    lesson_end = lesson_info['end_time']
+    day = lesson_info['day']
+    if day not in blocked_slots:
+        return False
+    timings_list = blocked_slots[day]
+    lesson_start = int(lesson_info['start_time'])
+    lesson_end = int(lesson_info['end_time'])
     for timing in timings_list:
         time = timing.split('-')
-        start_block = time[0]
-        end_block = time[1]
+        start_block = int(time[0])
+        end_block = int(time[1])
         #lesson starts in block
         if lesson_start < end_block and lesson_start >= start_block:
             return True

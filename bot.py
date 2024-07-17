@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 db = DBClient()
 
 #Milestone 3
-SEMESTER, MODS, DELETE, BLOCK_DAYS, BLOCKOUT_TIMINGS, CONFIRM_BLOCKDAYS, FINISH = range(7)
+SEMESTER, MODS, DELETE, BLOCK_DAYS, CONFIRM_BLOCKDAYS, BLOCKOUT_TIMINGS, LIMIT_HOURS, FINISH = range(8)
 
 MAX_NO_OF_MODULES = 10
 
@@ -358,13 +358,23 @@ async def blockout_timings(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         blocked_slots = blockout_timings_cleaner(selected_slots)
         context.user_data['blocked_slots'] = blocked_slots
         logger.info("Blocked out timings selected: %s", blocked_slots)
+        if not selected_slots:
+            await query.message.reply_text(
+                "No timings have been selected.\n\n"
+                "Please indicate the total number of hours you wish to limit your lessons to each day. (an integer between 2 - 24 inclusive)\n\n"
+                "If you do not have any particular preferences, please click 'Skip'.\n\n"
+                "If you have made a mistake and would like to re-indicate your preference, please click 'Edit'.",
+                reply_markup=ReplyKeyboardMarkup([["Edit", "Skip"]], one_time_keyboard=True, resize_keyboard=True)
+            )
+            return LIMIT_HOURS
         await query.message.reply_text(
-            f"You have selected the following blockout timings:\n{blocktimings_printer(blocked_slots)}\n"
-            "Please click 'Continue' to confirm your selection.\n\n"
+            f"The following selected timings will be excluded from the planning:\n{blocktimings_printer(blocked_slots)}\n"
+            "Please indicate the total number of hours you wish to limit your lessons to each day. (an integer between 2 - 24 inclusive)\n\n"
+            "If you do not have any particular preferences, please click 'Skip'.\n\n"
             "If you have made a mistake and would like to re-indicate your preference, please click 'Edit'.",
-            reply_markup=ReplyKeyboardMarkup([["Continue", "Edit"]], one_time_keyboard=True, resize_keyboard=True)
+            reply_markup=ReplyKeyboardMarkup([["Edit", "Skip"]], one_time_keyboard=True, resize_keyboard=True)
         )
-        return FINISH
+        return LIMIT_HOURS
 
     day, timeslot = query.data.split(":")
     if (day, timeslot) in selected_slots:
@@ -378,14 +388,9 @@ async def blockout_timings(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await query.edit_message_reply_markup(reply_markup=create_timetable_keyboard(selected_slots))
     return BLOCKOUT_TIMINGS
 
-async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def limit_hours(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.message.from_user
     message = update.message.text.strip()
-    if message.lower() not in ['continue', 'edit']:
-        await update.message.reply_text(
-            "Invalid input received. Please ensure that you only click either 'Continue' or 'Edit'."
-        )
-        return FINISH
     
     if message.lower() == 'edit':
         selected_slots = context.user_data.get('selected_slots', set())
@@ -397,6 +402,55 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         )
 
         return BLOCKOUT_TIMINGS
+    
+    if message.lower() == 'skip':
+        logger.info("User %s has opted to skip attention span limiter", user.first_name)
+        await update.message.reply_text(
+            "No attention span limiter has been set.\n\n"
+            "Please click 'Continue' to confirm your selection and generate your timetable.\n\n"
+            "If you have made a mistake and would like to re-indicate your preference, please click 'Edit'.",
+            reply_markup=ReplyKeyboardMarkup([["Continue", "Edit"]], one_time_keyboard=True, resize_keyboard=True)
+        )
+        return FINISH
+    
+    if message.isdigit():
+        hours = int(message)
+        if 2 <= hours <= 24:
+            context.user_data["limit_hours"] = hours
+            logger.info("Attention span limiter of %d hours set.", hours)
+            await update.message.reply_text(
+                f"Total number of lesson hours per day will be limited to {hours}.\n\n"
+                "Please click 'Continue' to confirm your selection and generate your timetable.\n\n"
+                "If you have made a mistake and would like to re-indicate your preference, please click 'Edit'.",
+                reply_markup=ReplyKeyboardMarkup([["Continue", "Edit"]], one_time_keyboard=True, resize_keyboard=True)
+            )
+            return FINISH
+        else:
+            await update.message.reply_text("Please ensure that the number entered is between 2 and 24 inclusive.")
+            return LIMIT_HOURS
+    else:
+        await update.message.reply_text("Invalid input received. Please ensure that the number entered is between 2 and 24 inclusive without any extra symbols or letters.")
+        return LIMIT_HOURS
+
+async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user = update.message.from_user
+    message = update.message.text.strip()
+    if message.lower() not in ['continue', 'edit']:
+        await update.message.reply_text(
+            "Invalid input received. Please ensure that you only click either 'Continue' or 'Edit'."
+        )
+        return FINISH
+    
+    if message.lower() == 'edit':
+        await update.message.reply_text(
+            "Please enter the total number of hours you wish to limit your lessons to each day\n\n"
+            "If you do not have any particular preferences, please click 'Skip'.\n\n"
+            "If you have made a mistake previously and would like to re-indicate your preference for your blockout timings, please click 'Edit'.",
+            reply_markup=ReplyKeyboardMarkup([["Edit", "Skip"]], one_time_keyboard=True, resize_keyboard=True)
+        )
+
+        return LIMIT_HOURS
+    
     modules = context.user_data.get('modules', [])
     semester = context.user_data["semester"]
     blocked_out_days = context.user_data.get('blocked_days', [])
@@ -405,9 +459,11 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     blocked_out_timings = context.user_data.get('blocked_slots', list())
     string_blocked_timings = blocktimings_printer(blocked_out_timings)
 
+    max_hours = context.user_data.get('limit_hours', 24)
+    print(max_hours)
     #allocator = ModuleAllocator(modules, blocked_out_days)
     module_info = db.draw_module_info(modules, semester, blocked_out_days, blocked_out_timings)
-    planner = ModPlanner(modules, module_info, semester)
+    planner = ModPlanner(modules, module_info, semester, max_hours)
     url = planner.solve()
     if not url:
         logger.info("Unable to find optimal timetable")
@@ -417,7 +473,8 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             f"Modules: {modules}\n"
             f"Days excluded from timetable planning: {string_blocked_out_days}\n"
             "Blockout timings excluded from timetable planning: \n"
-            f"{string_blocked_timings}\n"
+            f"{string_blocked_timings}"
+            f"Limit on total number of lesson hours per day: {max_hours}\n\n"
             "Thank you for using PlanBetterLah!",
             reply_markup=ReplyKeyboardRemove(),
         )
@@ -431,7 +488,8 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         f"Modules: {modules}\n"
         f"Days excluded from timetable planning: {string_blocked_out_days}\n"
         "Blockout timings excluded from timetable planning: \n"
-        f"{string_blocked_timings}\n"
+        f"{string_blocked_timings}"
+        f"Limit on total number of lesson hours per day: {max_hours}\n\n"
         "Thank you for using PlanBetterLah!",
         reply_markup=ReplyKeyboardRemove(),
     )
@@ -461,8 +519,9 @@ def main() -> None:
             MODS: [MessageHandler(filters.TEXT & ~filters.COMMAND, mods)],
             DELETE: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_delete)],
             BLOCK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, block_days)],
-            BLOCKOUT_TIMINGS: [CallbackQueryHandler(blockout_timings)], 
             CONFIRM_BLOCKDAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_blockdays)],
+            BLOCKOUT_TIMINGS: [CallbackQueryHandler(blockout_timings)], 
+            LIMIT_HOURS: [MessageHandler(filters.TEXT & ~filters.COMMAND, limit_hours)],
             FINISH: [MessageHandler(filters.TEXT & ~filters.COMMAND, finish)]
         },
         fallbacks=[CommandHandler("done", done), CommandHandler("delete", delete), CommandHandler("generate", generate), CommandHandler("cancel", cancel)],
