@@ -90,7 +90,7 @@ class DBClient:
         self.logger.info(f'{resp.deleted_count} rows deleted')
         self.insert_module_info()
 
-     def draw_module_info(self, modules: list, semester: str, blocked_days: list, timings: dict) -> list:
+    def draw_module_info(self, modules: list, semester: str, blocked_days: list, timings: dict) -> list:
         mod_info = []
         for module in modules:
             mod_info.append(self.get_mod_info(module, semester))
