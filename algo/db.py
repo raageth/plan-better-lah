@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import logging
 import requests
 from utils.keys import MONGO_CONN_STRING
@@ -13,7 +17,7 @@ class DBClient:
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
         )
         self.logger = logging.getLogger(self.__class__.__name__)
-        acad_year = '2023-2024'
+        acad_year = '2024-2025'
         self.base_url = f'https://api.nusmods.com/v2/{acad_year}/%s.json'
         self.mongo_client = MongoClient(f'{MONGO_CONN_STRING}')
         self.db = self.mongo_client.nusmods
@@ -34,13 +38,14 @@ class DBClient:
 
     def _get_modules(self) -> list:
         url = self.base_url % 'moduleList'
-        data = requests.get(url).json()
+        data = requests.get(url=url).json()       
         module_list = [mod['moduleCode'] for mod in data]
         return module_list
 
     def _get_module_info(self, module_code: str) -> dict:
         url = self.base_url % f'modules/{module_code}'
-        data = requests.get(url).json()
+        # handle api resp
+        data = requests.get(url=url).json()
         module_info = {
             'mod_id': module_code,
             'mod_name': data['title'],
@@ -74,11 +79,17 @@ class DBClient:
         insert_list = []
         for mod_id in mod_id_list:
             module_info = self._get_module_info(mod_id)
+            self.logger.info(f'Retrieved module info for {mod_id}')
             insert_list.append(module_info)
         
         result = self.collection.insert_many(insert_list).inserted_ids
         self.logger.info(f'{len(result)} rows inserted')
     
+    def refresh_module_info(self) -> None:
+        resp = self.collection.delete_many({})
+        self.logger.info(f'{resp.deleted_count} rows deleted')
+        self.insert_module_info()
+
     def draw_module_info(self, modules: list, semester: str, blocked_days: list) -> list:
         mod_info = []
         for module in modules:
@@ -140,9 +151,18 @@ class DBClient:
         
         return mod_info
 
+    def create_testcase(self, modules: list, semester: str, blocked_days: list, result: str) -> None:
+        """
+        Generates testcases
+
+        result: positive / negative
+        """
+        mod_info = self.draw_module_info(modules, semester, blocked_days)
+        with open(os.path.join(os.path.dirname(__file__), '..', 'tests', 'testcases', f's{semester}_{len(modules)}m_{result}.json'), 'w') as f:
+            json.dump(mod_info, f)
+        self.logger.info(f'Testcase for {semester} {len(modules)} modules created')
+
 if __name__ == "__main__":
-    client = DBClient()
-    t = client.get_mod_info('CE3102', '2')
-    client.draw_module_info(['CE3102', 'MA1521'], '2', [2])
+    pass
     
     
