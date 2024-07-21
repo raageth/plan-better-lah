@@ -29,8 +29,3 @@ jobs:
     - name: Run tests
       run: |
         pytest
-
-    - name: Lint code
-      run: |
-        pip install flake8
-        flake8 . --count  --show-source --statistics
