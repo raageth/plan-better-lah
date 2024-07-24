@@ -12,6 +12,7 @@ class ModPlanner:
         self.max_mins = max_hours * 60
         self.blocked_timings = blocked_timings
         self.interval_name_map = {}
+        self.hard_url = True
     
     def _add_constraints(self, hard=True):
         overlap_vars = []
@@ -129,6 +130,7 @@ class ModPlanner:
         if status != cp_model.OPTIMAL and status != cp_model.FEASIBLE:
             print("Unable to find solution with all the constraints, finding a good possible solution:\n")
             # If no solution found, reinitialize model with soft constraints to minimize overlap
+            self.hard_url = False
             self._reinitialize_model(hard=False)
 
             best_overlap = float('inf')
@@ -164,7 +166,7 @@ class ModPlanner:
     def _parse_results(self, solver, status):
         if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
             url_info = [[] for _ in range(len(self.modules))]
-            info_source = self.filtered_info if solver.ObjectiveValue() == 0 else self.mod_info
+            info_source = self.filtered_info if self.hard_url else self.mod_info
             for module_idx, module in enumerate(self.modules):
                 for class_type in info_source[module_idx].keys():
                     for class_no in info_source[module_idx][class_type].keys():
