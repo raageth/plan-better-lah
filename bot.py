@@ -14,7 +14,7 @@ from telegram.ext import (
 from utils.keys import BOT_API_KEY
 from algo.db import DBClient
 from algo.mod_planner import ModPlanner
-from utils.helpers import user_days_to_array, int_to_days, blockout_timings_cleaner, blocktimings_printer
+from utils.helpers import user_days_to_array, int_to_days, blockout_timings_cleaner, blocktimings_printer, blocked_time_merge
 
 # Enable logging
 logging.basicConfig(
@@ -471,15 +471,41 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         string_max_hours = "No attention span limiter has been set for total number of lesson hours per day."
     else: 
         string_max_hours = f"Limit on total number of lesson hours per day: {max_hours}"
-    print(max_hours)
-    #allocator = ModuleAllocator(modules, blocked_out_days)
-    module_info = db.draw_module_info(modules, semester, blocked_out_days, blocked_out_timings)
-    planner = ModPlanner(modules, module_info, semester, max_hours)
-    url = planner.solve()
+    
+    blocked_out_time = blocked_time_merge(blocked_out_days, blocked_out_timings)
+    filtered_module_info = db.draw_filtered_module_info(modules, semester, blocked_out_days, blocked_out_timings)
+    module_info = db.draw_module_info(modules, semester)
+    logger.info("Finding timetable with the following information:")
+    logger.info(f"modules: {modules}")
+    logger.info(f"semester: {semester}")
+    logger.info(f"max_hours: {max_hours}")
+    logger.info(f"blocked_out_time: {blocked_out_time}")
+    planner = ModPlanner(modules, module_info, semester, max_hours, blocked_out_time, filtered_module_info)
+    solution = planner.solve()
+    url = solution[0]
+    violation_info = solution[1]
     if not url:
-        logger.info("Unable to find optimal timetable")
+        logger.info("Unable to find optimal timetable even with relaxed constraints")
         await update.message.reply_text(
-            "Sorry, we did not manage to find a timetable that met these following conditions:\n"
+            "Sorry, we did not manage to find a timetable that met all of the given constraints. Kindly check if there are clashes between the selected modules which cannot be resolved by timetable planning.\n\n"
+            "Recap of list of conditions provided:\n"
+            f"Semester: {semester}\n"
+            f"Modules: {modules}\n"
+            f"{string_blocked_out_days}\n"
+            f"{string_blocked_timings}"
+            f"{string_max_hours}\n\n"
+            "Thank you for using PlanBetterLah!",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return ConversationHandler.END
+    
+    elif violation_info:
+        logger.info("Unable to find optimal timetable, found good approximation of timetable")
+        await update.message.reply_text(
+            "Sorry, we did not manage to find a timetable that met all of the given constraints. "
+            f"Please refer to the following URL for a possible timetable with minimised relaxed constraints instead. \n{url}\n\n"
+            f"Summary of constraints breached:\n {violation_info}\n"
+            "Recap of list of conditions provided:\n"
             f"Semester: {semester}\n"
             f"Modules: {modules}\n"
             f"{string_blocked_out_days}\n"
