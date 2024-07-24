@@ -90,39 +90,18 @@ class DBClient:
         self.logger.info(f'{resp.deleted_count} rows deleted')
         self.insert_module_info()
 
-    def draw_module_info(self, modules: list, semester: str, blocked_days: list, timings: dict) -> list:
+    def draw_module_info(self, modules: list, semester: str) -> list:
         mod_info = []
         for module in modules:
             mod_info.append(self.get_mod_info(module, semester))
-        """
-        unique_mod_info = []
+        return mod_info
 
-        #Filter out only unique lesson choices
-        for mod in mod_info:
-            unique_info = {}
+    #old version
+    def draw_filtered_module_info(self, modules: list, semester: str, blocked_days: list, timings: dict) -> list:
+        mod_info = []
+        for module in modules:
+            mod_info.append(self.get_mod_info(module, semester))
 
-            #Iterate over each type('TUT', 'LEC', etc)
-            for lesson_type, class_info in mod.items():
-                unique_classes = {}
-                unique_combi = set() #Store unique (day, start_time, end_time)
-
-                #Iterate over each class
-                for lesson_no, lesson_info in class_info.items():
-                    for item in lesson_info:
-                        combi = (item['day'], item['start_time'], item['end_time'])
-
-                        if combi not in unique_combi:
-                            unique_combi.add(combi)
-
-                            if lesson_no not in unique_classes:
-                                unique_classes[lesson_no] = []
-
-                            unique_classes[lesson_no].append(item)
-
-                unique_info[lesson_type] = unique_classes
-            
-            unique_mod_info.append(unique_info)
-        """
         blocked_timings = {}
         for key in timings:
             if timings[key]:

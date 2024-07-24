@@ -70,6 +70,26 @@ def blockout_timings_cleaner(timings: list) -> dict:
         blocktimings[slot[0]].append(slot[1])
     for key in blocktimings:
         blocktimings[key].sort()
+    #Make timings more concise
+    for day, timeslots in blocktimings.items():
+        l = len(timeslots)
+        if l <= 1:
+            continue
+        new_slots = []
+        new_slots.append(timeslots[0])
+        for idx in range(1, l):
+            prev_timing = new_slots[-1]
+            prev = prev_timing.split('-')
+            next_timing = timeslots[idx]
+            next = next_timing.split('-')
+            #check if can combine slots
+            if prev[1] == next[0]:
+                new_time = prev[0] + '-' + next[1]
+                new_slots[-1] = new_time
+            else:
+                new_slots.append(next_timing)
+        blocktimings[day] = new_slots
+
     return blocktimings
 
 def blocktimings_printer(timings: dict) -> str:
@@ -78,6 +98,16 @@ def blocktimings_printer(timings: dict) -> str:
         if val:
             s += f"{key}: {val}\n" 
     return s
+
+def blocked_time_merge(days: list, timings: dict) -> dict:
+    merged_time = {}
+    for day, timing in timings.items():
+        int_day = day_to_int(day)
+        if int_day in days:
+            merged_time[int_day] = ['0000-2359']
+        else:
+            merged_time[int_day] = timing
+    return merged_time
 
 def check_block_timings(lesson_info: dict, blocked_slots: dict) -> bool:
     day = lesson_info['day']
@@ -100,6 +130,18 @@ def check_block_timings(lesson_info: dict, blocked_slots: dict) -> bool:
         elif lesson_start <= start_block and lesson_end >= end_block:
             return True
     return False
+
+def parse_time(time_str):
+    """Convert time in HHMM format to minutes since midnight."""
+    hours = int(time_str[:2])
+    minutes = int(time_str[2:])
+    return hours * 60 + minutes
+
+def format_time(minutes):
+    """Convert minutes since midnight to HHMM format."""
+    hours = minutes // 60
+    minutes = minutes % 60
+    return f'{hours:02d}{minutes:02d}'
 
 def url_generator(modules: list, class_info: list, semester: str) -> str:
     mod_info = ""
