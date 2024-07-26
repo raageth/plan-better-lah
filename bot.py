@@ -474,7 +474,7 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     blocked_out_time = blocked_time_merge(blocked_out_days, blocked_out_timings)
     filtered_module_info = db.draw_filtered_module_info(modules, semester, blocked_out_days, blocked_out_timings)
-    module_info = db.draw_module_info(modules, semester)
+    module_info = db.draw_distinct_info(modules, semester)
     logger.info("Finding timetable with the following information:")
     logger.info(f"modules: {modules}")
     logger.info(f"semester: {semester}")
@@ -484,10 +484,29 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     solution = planner.solve()
     url = solution[0]
     violation_info = solution[1]
+    error_message = solution[2]
     if not url:
-        logger.info("Unable to find optimal timetable even with relaxed constraints")
+        #Unable to find clashes
+        if not error_message:
+            logger.info("Unable to find optimal timetable even with relaxed constraints and no known clashes found.")
+            await update.message.reply_text(
+                "Sorry, we did not manage to find a timetable that meets all of the given constraints. Kindly check if there are clashes between the selected modules which cannot be resolved by timetable planning.\n\n"
+                "Recap of list of conditions provided:\n"
+                f"Semester: {semester}\n"
+                f"Modules: {modules}\n"
+                f"{string_blocked_out_days}\n"
+                f"{string_blocked_timings}"
+                f"{string_max_hours}\n\n"
+                "Thank you for using PlanBetterLah!",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+            logger.info("Conversation with User %s has ended.", user.first_name)
+            return ConversationHandler.END
+        
+        logger.info("No timetable found due to irreconcilable clashes between modules.")
         await update.message.reply_text(
-            "Sorry, we did not manage to find a timetable that met all of the given constraints. Kindly check if there are clashes between the selected modules which cannot be resolved by timetable planning.\n\n"
+            "Sorry, we did not manage to find a timetable that meets all of the given constraints. Kindly check if the selection of modules is valid.\n"
+            f"{error_message}"
             "Recap of list of conditions provided:\n"
             f"Semester: {semester}\n"
             f"Modules: {modules}\n"
@@ -497,12 +516,13 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             "Thank you for using PlanBetterLah!",
             reply_markup=ReplyKeyboardRemove(),
         )
+        logger.info("Conversation with User %s has ended.", user.first_name)
         return ConversationHandler.END
-    
+
     elif violation_info:
-        logger.info("Unable to find optimal timetable, found good approximation of timetable")
+        logger.info("Unable to find optimal timetable, found good approximation of timetable.")
         await update.message.reply_text(
-            "Sorry, we did not manage to find a timetable that met all of the given constraints. "
+            "Sorry, we did not manage to find a timetable that meets all of the given constraints. "
             f"Please refer to the following URL for a possible timetable with minimised relaxed constraints instead. \n{url}\n\n"
             f"Summary of constraints breached:\n {violation_info}\n"
             "Recap of list of conditions provided:\n"
@@ -514,6 +534,7 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             "Thank you for using PlanBetterLah!",
             reply_markup=ReplyKeyboardRemove(),
         )
+        logger.info("Conversation with User %s has ended.", user.first_name)
         return ConversationHandler.END
     
     logger.info("User %s has received URL", user.first_name)
@@ -528,7 +549,7 @@ async def finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         "Thank you for using PlanBetterLah!",
         reply_markup=ReplyKeyboardRemove(),
     )
-
+    logger.info("Conversation with User %s has ended.", user.first_name)
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

@@ -151,3 +151,35 @@ def url_generator(modules: list, class_info: list, semester: str) -> str:
             mod_info += classes
         mod_info = mod_info[:-1] + '&'
     return f"https://nusmods.com/timetable/sem-{semester}/share?{mod_info[:-1]}"
+
+def single_timeslot_filter(distinct_mod_info: list) -> list:
+    filtered_info = []
+    for module in distinct_mod_info:
+        filtered_module = {}
+        for class_type, class_info in module.items():
+            if len(class_info) == 1:
+                filtered_module[class_type] = class_info
+        filtered_info.append(filtered_module)
+    return filtered_info
+
+def check_overlaps(module1_info, module2_info):
+    overlaps = []
+    for class_type1, lessons1 in module1_info.items():
+        for times1 in lessons1.values():
+            for class1 in times1:
+                day1 = class1['day']
+                start1 = parse_time(class1['start_time'])
+                end1 = parse_time(class1['end_time'])
+                for class_type2, lessons2 in module2_info.items():
+                    for times2 in lessons2.values():
+                        for class2 in times2:
+                            day2 = class2['day']
+                            start2 = parse_time(class2['start_time'])
+                            end2 = parse_time(class2['end_time'])
+                            # Check for any overlap
+                            if day1 == day2 and start1 < end2 and start2 < end1:
+                                overlaps.append({
+                                    'module1': f"{class_type1}[{class1['class_no']}] on {int_to_days(day1)}, {class1['start_time']}-{class1['end_time']}",
+                                    'module2': f"{class_type2}[{class2['class_no']}] on {int_to_days(day2)}, {class2['start_time']}-{class2['end_time']}"
+                                })
+    return overlaps

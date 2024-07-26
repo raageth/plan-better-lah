@@ -96,11 +96,34 @@ class DBClient:
             mod_info.append(self.get_mod_info(module, semester))
         return mod_info
 
-    #old version
+    def draw_distinct_info(self, modules: list, semester: str) -> list:
+        mod_info = self.draw_module_info(modules, semester)
+
+        def is_identical(class_list1, class_list2):
+            if len(class_list1) != len(class_list2):
+                return False
+            sorted_class_list1 = sorted(class_list1, key=lambda x: (x['day'], x['start_time'], x['end_time']))
+            sorted_class_list2 = sorted(class_list2, key=lambda x: (x['day'], x['start_time'], x['end_time']))
+            return all(class1['day'] == class2['day'] and
+                    class1['start_time'] == class2['start_time'] and
+                    class1['end_time'] == class2['end_time']
+                    for class1, class2 in zip(sorted_class_list1, sorted_class_list2))
+
+        distinct_mod_info = []
+        for module in mod_info:
+            distinct_module = {}
+            for class_type, class_groups in module.items():
+                unique_classes = {}
+                for class_no, class_list in class_groups.items():
+                    if not any(is_identical(class_list, unique_class_list) for unique_class_list in unique_classes.values()):
+                        unique_classes[class_no] = class_list
+                distinct_module[class_type] = unique_classes
+            distinct_mod_info.append(distinct_module)
+        return distinct_mod_info
+
+
     def draw_filtered_module_info(self, modules: list, semester: str, blocked_days: list, timings: dict) -> list:
-        mod_info = []
-        for module in modules:
-            mod_info.append(self.get_mod_info(module, semester))
+        mod_info = self.draw_distinct_info(modules, semester)
 
         blocked_timings = {}
         for key in timings:
@@ -149,5 +172,3 @@ class DBClient:
 
 if __name__ == "__main__":
     pass
-    
-    

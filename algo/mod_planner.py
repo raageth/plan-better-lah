@@ -1,6 +1,6 @@
 from ortools.sat.python import cp_model
 from collections import defaultdict
-from utils.helpers import url_generator, int_to_days, parse_time, format_time
+from utils.helpers import url_generator, int_to_days, parse_time, format_time, single_timeslot_filter, check_overlaps
 
 class ModPlanner:
     def __init__(self, modules: list, mod_info: list, sem: str, max_hours: int, blocked_timings: dict, filtered_info: list):
@@ -126,14 +126,15 @@ class ModPlanner:
         solver.parameters.max_time_in_seconds = 600.0  # Allow more time for the solver
         status = solver.Solve(self.model)
         best_info = ""
+        errormsg = ""
 
         if status != cp_model.OPTIMAL and status != cp_model.FEASIBLE:
-            print("Unable to find solution with all the constraints, finding a good possible solution:\n")
+            print("Unable to find solution with all the constraints, finding a good possible solution...\n")
             # If no solution found, reinitialize model with soft constraints to minimize overlap
             self.hard_url = False
             self._reinitialize_model(hard=False)
 
-            best_overlap = float('inf')
+            best_breach = float('inf')
             best_solver = None
             best_status = None
 
@@ -144,24 +145,44 @@ class ModPlanner:
                 solver.parameters.max_time_in_seconds = 600.0  # Increase time limit
                 status = solver.Solve(self.model)
                 if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:  
-                    current_overlap_info = self.calculate_total_overlap(solver)
-                    current_overlap = current_overlap_info[0]
-                    if current_overlap < best_overlap:
-                        best_overlap = current_overlap
+                    current_breach_info = self.calculate_total_overlap(solver)
+                    current_breach = current_breach_info[0]
+                    if current_breach < best_breach:
+                        best_breach = current_breach
                         best_solver = solver
                         best_status = status
-                        best_info = current_overlap_info[1]
+                        best_info = current_breach_info[1]
 
             if best_solver is not None and best_status is not None:
                 result = self._parse_results(best_solver, best_status)
             else:
-                print("No feasible solution found with relaxed constraints.")
+                #Reinitialise again to find out clashes in lessons
+                print("No feasible solution found with relaxed constraints.\n")
                 result = ""
+                single_info = single_timeslot_filter(self.mod_info) #filtering only lesson_info that only has 1 possible timing and day
+                length = len(self.modules)
+                for i in range(length):
+                    #checking for filtered info
+                    if not single_info[i]:
+                        continue
+
+                    for j in range(i+1, length):
+                        if not single_info[j]:
+                            continue
+
+                        overlaps = check_overlaps(single_info[i], single_info[j])
+                        if overlaps:
+                            print(f"Irreconcilable clashes found between {self.modules[i]} and {self.modules[j]}:")
+                            errormsg += f"\nIrreconcilable clashes found between {self.modules[i]} and {self.modules[j]}:\n"
+
+                            for overlap in overlaps:
+                                print(f"{self.modules[i]} {overlap['module1']}, clashes with {self.modules[j]} {overlap['module2']}.")
+                                errormsg += f"{self.modules[i]} {overlap['module1']}, clashes with {self.modules[j]} {overlap['module2']}.\n\n"
         else:
             result = self._parse_results(solver, status)
 
         print(best_info)
-        return (result, best_info)
+        return (result, best_info, errormsg)
 
     def _parse_results(self, solver, status):
         if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
@@ -247,9 +268,9 @@ class ModPlanner:
             excess_info = 'No classes that exceeds the maximum lesson hours a day.\n'
 
         #Final check in case hard constraints algorithm did not run correctly
-        
-        if total_overlap:
-            return (total_overlap, overlap_info + excess_info)
+        total_breach = total_overlap + total_excess_lessons
+        if total_breach:
+            return (total_breach, overlap_info + excess_info)
         else:
             return (0, "")
         
