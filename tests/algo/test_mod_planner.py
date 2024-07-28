@@ -17,7 +17,7 @@ def test_s2_5m_positive():
     test_result_url = "https://nusmods.com/timetable/sem-2/share?CS1101S=TUT:01,REC:02,LEC:1&MA1521=TUT:5,LEC:2&MA1522=TUT:18,LEC:2&IS1108=LEC:2,TUT:10&GEA1000=TUT:D25"
     test_mod_info = load_test_file('s2_5m_positive.json')
     planner = ModPlanner(test_modules, test_mod_info, 2, 24, test_blocked_timings, test_mod_info)
-    (url, best_info) = planner.solve()
+    (url, best_info, errormsg) = planner.solve()
     assert url
 
 def test_s1_8m_negative():
@@ -29,5 +29,5 @@ def test_s1_8m_negative():
     test_result_url = ""
     test_mod_info = load_test_file('s1_8m_negative.json')
     planner = ModPlanner(test_modules, test_mod_info, 1, 6, test_blocked_timings, test_mod_info)
-    (url, best_info) = planner.solve()
+    (url, best_info, errormsg) = planner.solve()
     assert not url
